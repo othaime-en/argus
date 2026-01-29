@@ -1,0 +1,10 @@
+# ARGUS Default Configuration
+# Copy this file to ~/.config/argus/config.toml and customize
+
+# Polling interval in seconds (default: 30)
+refresh_interval = 30
+
+[ui]
+# Theme: "default", "dark", "light", "monokai"
+theme = "default"
+
