@@ -73,3 +73,55 @@ pub enum PipelineStatus {
     /// Pipeline was skipped
     Skipped,
 }
+
+impl PipelineStatus {
+    /// Returns true if the pipeline is in a terminal state (not running/pending)
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            PipelineStatus::Success
+                | PipelineStatus::Failed
+                | PipelineStatus::Cancelled
+                | PipelineStatus::Skipped
+        )
+    }
+
+    /// Returns true if the pipeline is active (running or pending)
+    pub fn is_active(&self) -> bool {
+        matches!(self, PipelineStatus::Running | PipelineStatus::Pending)
+    }
+
+    /// Returns true if the pipeline succeeded
+    pub fn is_success(&self) -> bool {
+        matches!(self, PipelineStatus::Success)
+    }
+
+    /// Returns true if the pipeline failed
+    pub fn is_failure(&self) -> bool {
+        matches!(self, PipelineStatus::Failed)
+    }
+
+    /// Returns a string representation of the status
+    pub fn as_str(&self) -> &str {
+        match self {
+            PipelineStatus::Success => "Success",
+            PipelineStatus::Running => "Running",
+            PipelineStatus::Failed => "Failed",
+            PipelineStatus::Pending => "Pending",
+            PipelineStatus::Cancelled => "Cancelled",
+            PipelineStatus::Skipped => "Skipped",
+        }
+    }
+
+    /// Returns an emoji representation of the status
+    pub fn emoji(&self) -> &str {
+        match self {
+            PipelineStatus::Success => "✓",
+            PipelineStatus::Running => "●",
+            PipelineStatus::Failed => "✗",
+            PipelineStatus::Pending => "○",
+            PipelineStatus::Cancelled => "⊘",
+            PipelineStatus::Skipped => "⊙",
+        }
+    }
+}
