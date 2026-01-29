@@ -1,0 +1,25 @@
+[package]
+name = "argus"
+version = "0.1.0"
+edition = "2021"
+authors = ["othaime-en"]
+description = "All-Seeing Pipeline Monitor - A TUI dashboard for CI/CD pipelines"
+license = "MIT"
+repository = "https://github.com/othaime-en/argus"
+
+[dependencies]
+ratatui = "0.26"
+crossterm = "0.27"
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+config = "0.14"
+reqwest = { version = "0.11", features = ["json"] }
+chrono = "0.4"
+anyhow = "1.0"
+thiserror = "1.0"
+dirs = "5.0"
+
+[dev-dependencies]
+proptest = "1.4"
