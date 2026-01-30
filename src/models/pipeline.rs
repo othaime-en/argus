@@ -125,3 +125,62 @@ impl PipelineStatus {
         }
     }
 }
+
+impl Pipeline {
+    /// Calculate the duration of the pipeline
+    pub fn calculate_duration(&self) -> Option<Duration> {
+        if let Some(finished) = self.finished_at {
+            Some(finished.signed_duration_since(self.started_at))
+        } else if self.status == PipelineStatus::Running {
+            Some(Utc::now().signed_duration_since(self.started_at))
+        } else {
+            None
+        }
+    }
+
+    /// Get a short commit SHA (first 7 characters)
+    pub fn short_commit_sha(&self) -> String {
+        self.commit_sha.chars().take(7).collect()
+    }
+
+    /// Get a truncated commit message (first line, max 50 chars)
+    pub fn short_commit_message(&self) -> String {
+        let first_line = self.commit_message.lines().next().unwrap_or("");
+        if first_line.len() > 50 {
+            format!("{}...", &first_line[..47])
+        } else {
+            first_line.to_string()
+        }
+    }
+
+    /// Count stages by status
+    pub fn stage_counts(&self) -> StageStatusCounts {
+        let mut counts = StageStatusCounts::default();
+        for stage in &self.stages {
+            match stage.status {
+                crate::models::stage::StageStatus::Success => counts.success += 1,
+                crate::models::stage::StageStatus::Running => counts.running += 1,
+                crate::models::stage::StageStatus::Failed => counts.failed += 1,
+                crate::models::stage::StageStatus::Pending => counts.pending += 1,
+                crate::models::stage::StageStatus::Skipped => counts.skipped += 1,
+            }
+        }
+        counts
+    }
+}
+
+/// Stage status counts for a pipeline
+#[derive(Debug, Default, Clone, Copy)]
+pub struct StageStatusCounts {
+    pub success: usize,
+    pub running: usize,
+    pub failed: usize,
+    pub pending: usize,
+    pub skipped: usize,
+}
+
+impl StageStatusCounts {
+    pub fn total(&self) -> usize {
+        self.success + self.running + self.failed + self.pending + self.skipped
+    }
+}
