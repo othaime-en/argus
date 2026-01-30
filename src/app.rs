@@ -1,4 +1,8 @@
+use crossterm::event::KeyCode;
+
 use crate::config::Config;
+use crate::models::Pipeline;
+use crate::utils::Result;
 
 /// Main application state
 #[derive(Debug)]
@@ -48,5 +52,63 @@ impl App {
     pub fn init_with_mock_data(&mut self) -> Result<()> {
         // TODO: Add mock pipelines here
         Ok(())
+    }
+
+    /// Handle keyboard input
+    pub fn handle_input(&mut self, key: KeyCode) {
+        match key {
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.should_quit = true;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.previous_pipeline();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.next_pipeline();
+            }
+            KeyCode::Char('r') => {
+                // Refresh will be implemented in Phase 2
+                // For now, just acknowledge the key press
+            }
+            KeyCode::Enter => {
+                // Toggle focus between pipeline list and details
+                self.focus = match self.focus {
+                    Focus::PipelineList => Focus::Details,
+                    Focus::Details => Focus::PipelineList,
+                };
+            }
+            _ => {}
+        }
+    }
+
+    /// Select the previous pipeline in the list
+    fn previous_pipeline(&mut self) {
+        if self.pipelines.is_empty() {
+            return;
+        }
+        
+        if self.selected_pipeline > 0 {
+            self.selected_pipeline -= 1;
+        } else {
+            self.selected_pipeline = self.pipelines.len() - 1;
+        }
+    }
+
+    /// Select the next pipeline in the list
+    fn next_pipeline(&mut self) {
+        if self.pipelines.is_empty() {
+            return;
+        }
+        
+        if self.selected_pipeline < self.pipelines.len() - 1 {
+            self.selected_pipeline += 1;
+        } else {
+            self.selected_pipeline = 0;
+        }
+    }
+
+    /// Get the currently selected pipeline
+    pub fn selected(&self) -> Option<&Pipeline> {
+        self.pipelines.get(self.selected_pipeline)
     }
 }
