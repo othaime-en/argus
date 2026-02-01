@@ -260,3 +260,138 @@ impl GitHubClient {
         Ok(text)
     }
 }
+
+// ---------------------------------------------------------------------------
+// Mapping helpers: GitHub types → internal models
+// ---------------------------------------------------------------------------
+
+/// Map a GitHub workflow-run status + conclusion pair to our `PipelineStatus`.
+fn map_pipeline_status(status: &str, conclusion: Option<&str>) -> PipelineStatus {
+    match status {
+        "completed" => match conclusion {
+            Some("success") => PipelineStatus::Success,
+            Some("failure") | Some("timed_out") => PipelineStatus::Failed,
+            Some("cancelled") => PipelineStatus::Cancelled,
+            Some("skipped") => PipelineStatus::Skipped,
+            // action_required, stale, neutral, etc. – treat as pending
+            _ => PipelineStatus::Pending,
+        },
+        "in_progress" => PipelineStatus::Running,
+        "queued" | "waiting" | "requested" => PipelineStatus::Pending,
+        _ => PipelineStatus::Pending,
+    }
+}
+
+/// Map a GitHub job status + conclusion pair to our `StageStatus`.
+fn map_stage_status(status: &str, conclusion: Option<&str>) -> StageStatus {
+    match status {
+        "completed" => match conclusion {
+            Some("success") => StageStatus::Success,
+            Some("failure") | Some("timed_out") => StageStatus::Failed,
+            Some("cancelled") => StageStatus::Skipped,
+            Some("skipped") => StageStatus::Skipped,
+            _ => StageStatus::Pending,
+        },
+        "in_progress" => StageStatus::Running,
+        "queued" | "waiting" => StageStatus::Pending,
+        _ => StageStatus::Pending,
+    }
+}
+
+/// Convert a `WorkflowRun` + its jobs into a `Pipeline`.
+fn run_to_pipeline(run: &WorkflowRun, repo: &str, owner: &str, jobs: Vec<Job>) -> Pipeline {
+    let status = map_pipeline_status(&run.status, run.conclusion.as_deref());
+
+    let started_at = run.run_started_at.unwrap_or(run.created_at);
+    let finished_at = if status.is_terminal() {
+        Some(run.updated_at)
+    } else {
+        None
+    };
+    let duration = finished_at.map(|end| end.signed_duration_since(started_at));
+
+    let stages: Vec<Stage> = jobs
+        .iter()
+        .enumerate()
+        .map(|(i, job)| {
+            let stage_status = map_stage_status(&job.status, job.conclusion.as_deref());
+            let dur = match (job.started_at, job.completed_at) {
+                (Some(s), Some(e)) => Some(e.signed_duration_since(s)),
+                _ => None,
+            };
+            Stage {
+                id: job.id.to_string(),
+                name: job.name.clone(),
+                status: stage_status,
+                started_at: job.started_at,
+                finished_at: job.completed_at,
+                duration: dur,
+                log_url: Some(format!(
+                    "https://github.com/{}/{}/actions/runs/{}/jobs/{}",
+                    owner, repo, run.id, job.id
+                )),
+                order: i,
+            }
+        })
+        .collect();
+
+    let commit_message = run
+        .display_title
+        .clone()
+        .unwrap_or_else(|| "No commit message".into());
+    let author = run
+        .actor
+        .as_ref()
+        .map(|a| a.login.clone())
+        .unwrap_or_else(|| "unknown".into());
+    let workflow_name = run
+        .name
+        .clone()
+        .unwrap_or_else(|| "Unnamed Workflow".into());
+
+    Pipeline {
+        id: format!("github-{}-{}", repo, run.id),
+        name: workflow_name,
+        source: "GitHub Actions".to_string(),
+        repository: format!("{}/{}", owner, repo),
+        branch: run.head_branch.clone().unwrap_or_else(|| "unknown".into()),
+        status,
+        build_number: run.run_number as u32,
+        started_at,
+        finished_at,
+        duration,
+        stages,
+        url: run.html_url.clone(),
+        commit_sha: run.head_sha.clone(),
+        commit_message,
+        author,
+    }
+}
+
+/// Parse raw log text into structured `LogEntry` items.
+/// GitHub CI logs contain timestamps like `2024-01-15T10:30:45.1234567Z` at
+/// the start of each line.  We try to parse those; if parsing fails we still
+/// keep the line as plain text.
+fn parse_log_lines(raw: &str) -> Vec<LogEntry> {
+    raw.lines()
+        .enumerate()
+        .map(|(i, line)| {
+            // Attempt to split on the first space after an ISO-8601 timestamp
+            let (timestamp, text) = if line.len() > 30 {
+                if let Ok(ts) = DateTime::parse_from_rfc3339(&line[..30].trim()) {
+                    (Some(ts.with_timezone(&Utc)), line[30..].trim_start().to_string())
+                } else {
+                    (None, line.to_string())
+                }
+            } else {
+                (None, line.to_string())
+            };
+
+            LogEntry {
+                line: i + 1,
+                text,
+                timestamp,
+            }
+        })
+        .collect()
+}
