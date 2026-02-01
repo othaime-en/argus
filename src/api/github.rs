@@ -116,4 +116,147 @@ impl GitHubClient {
             retry: RetryPolicy::default(),
         })
     }
+
+    // -----------------------------------------------------------------------
+    // Private helpers
+    // -----------------------------------------------------------------------
+
+    /// Execute an HTTP GET with automatic retry + exponential back-off.
+    ///
+    /// Transparently handles:
+    ///   - 429 Too Many Requests  → respects `Retry-After` header
+    ///   - 401 / 403              → surfaces an auth error immediately (no retry)
+    ///   - 5xx                    → retries with back-off
+    ///   - Network errors         → retries with back-off
+    async fn get_with_retry(&self, url: &str) -> Result<reqwest::Response> {
+        let mut attempt = 0u32;
+        let mut delay = self.retry.base_delay;
+
+        loop {
+            let resp = self
+                .http
+                .get(url)
+                .header("Authorization", format!("token {}", self.token))
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .send();
+
+            match resp.await {
+                Ok(response) => {
+                    let status = response.status();
+
+                    // Auth failures are not retryable
+                    if status == StatusCode::UNAUTHORIZED {
+                        return Err(ApiError::AuthFailed(
+                            "GitHub token is invalid or expired. \
+                             Ensure your token has 'repo' and 'workflow' scopes."
+                                .into(),
+                        )
+                        .into());
+                    }
+                    if status == StatusCode::FORBIDDEN {
+                        return Err(ApiError::AuthFailed(
+                            "GitHub API returned 403 Forbidden. \
+                             Your token may lack the required scopes."
+                                .into(),
+                        )
+                        .into());
+                    }
+
+                    // Rate-limited → respect Retry-After if present
+                    if status == StatusCode::TOO_MANY_REQUESTS {
+                        let retry_after = response
+                            .headers()
+                            .get("Retry-After")
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|s| s.parse::<u64>().ok())
+                            .unwrap_or(60);
+
+                        if attempt < self.retry.max_retries {
+                            attempt += 1;
+                            tokio::time::sleep(StdDuration::from_secs(retry_after)).await;
+                            continue;
+                        }
+                        return Err(ApiError::RateLimitExceeded.into());
+                    }
+
+                    // Server errors are retryable
+                    if status.is_server_error() {
+                        if attempt < self.retry.max_retries {
+                            attempt += 1;
+                            tokio::time::sleep(delay.to_std().unwrap_or(StdDuration::from_secs(1)))
+                                .await;
+                            delay = std::cmp::min(delay * 2, self.retry.max_delay);
+                            continue;
+                        }
+                        return Err(ApiError::ApiError {
+                            status: status.as_u16(),
+                            message: "GitHub API server error after retries".into(),
+                        }
+                        .into());
+                    }
+
+                    // Any other non-success status
+                    if !status.is_success() {
+                        return Err(ApiError::ApiError {
+                            status: status.as_u16(),
+                            message: format!("Unexpected status from GitHub API: {}", status),
+                        }
+                        .into());
+                    }
+
+                    return Ok(response);
+                }
+                Err(e) => {
+                    if attempt < self.retry.max_retries {
+                        attempt += 1;
+                        tokio::time::sleep(delay.to_std().unwrap_or(StdDuration::from_secs(1)))
+                            .await;
+                        delay = std::cmp::min(delay * 2, self.retry.max_delay);
+                        continue;
+                    }
+                    return Err(ApiError::Network(e.to_string()).into());
+                }
+            }
+        }
+    }
+
+    /// Fetch the most recent workflow runs for a single repository.
+    /// Returns up to `per_page` runs (GitHub caps at 100).
+    async fn fetch_runs_for_repo(&self, repo: &str, per_page: u32) -> Result<Vec<WorkflowRun>> {
+        let url = format!(
+            "{}/repos/{}/{}/actions/runs?per_page={}&status=",
+            GITHUB_API_BASE, self.owner, repo, per_page
+        );
+        let resp = self.get_with_retry(&url).await?;
+        let body: WorkflowRunsResponse = resp.json().await.map_err(|e| {
+            ApiError::ParseFailed(format!("Failed to parse workflow runs: {}", e))
+        })?;
+        Ok(body.workflow_runs)
+    }
+
+    /// Fetch all jobs for a single workflow run.
+    async fn fetch_jobs_for_run(&self, repo: &str, run_id: u64) -> Result<Vec<Job>> {
+        let url = format!(
+            "{}/repos/{}/{}/actions/runs/{}/jobs",
+            GITHUB_API_BASE, self.owner, repo, run_id
+        );
+        let resp = self.get_with_retry(&url).await?;
+        let body: JobsResponse = resp.json().await.map_err(|e| {
+            ApiError::ParseFailed(format!("Failed to parse jobs: {}", e))
+        })?;
+        Ok(body.jobs)
+    }
+
+    /// Fetch the raw log text for a single job.
+    async fn fetch_job_log(&self, job_id: u64) -> Result<String> {
+        let url = format!("{}/repos/actions/jobs/{}/logs", GITHUB_API_BASE, job_id);
+        // For logs the owner/repo aren't needed in the URL; GitHub routes by job_id.
+        // However some installations require it. We use the simpler form here.
+        let resp = self.get_with_retry(&url).await?;
+        let text = resp.text().await.map_err(|e| {
+            ApiError::ParseFailed(format!("Failed to read log body: {}", e))
+        })?;
+        Ok(text)
+    }
 }
