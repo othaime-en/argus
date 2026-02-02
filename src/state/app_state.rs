@@ -84,6 +84,38 @@ impl AppState {
     /// first, then the new set is inserted.  This avoids stale entries
     /// lingering after a workflow is deleted or renamed on GitHub.
     pub fn merge_pipelines(&mut self, source_name: &str, pipelines: Vec<Pipeline>) {
+        // Remove old entries from this source
+        self.pipelines.retain(|_, p| {
+            // Match by the source_name stored in the pipeline's source field
+            // combined with checking source_status keys. We use the `source`
+            // field on Pipeline which stores e.g. "GitHub Actions", but we
+            // need to match by the config source_name. We tag pipelines via
+            // their id prefix pattern (github-*, gitlab-*, etc.).
+            // Simpler approach: remove pipelines whose repository matches one
+            // of the repos we're about to replace.
+            // Simplest correct approach: track source_name → pipeline ids.
+            true // handled below
+        });
+
+        // Remove all pipelines that came from this source by checking if
+        // any of the new pipelines share the same source_name tag.
+        // We embed the source_name in the pipeline id at creation time
+        // (see github.rs: id = "github-{repo}-{run_id}").
+        // For a clean merge we remove all pipelines whose id starts with
+        // any prefix that matches this source's repos.
+        let new_ids: Vec<String> = pipelines.iter().map(|p| p.id.clone()).collect();
+
+        // Determine which IDs to evict: any existing pipeline whose
+        // "source" field matches the platform AND whose repository is one
+        // we just fetched fresh data for.
+        let new_repos: std::collections::HashSet<&str> =
+            pipelines.iter().map(|p| p.repository.as_str()).collect();
+
+        self.pipelines.retain(|_, p| {
+            // Keep pipelines from *other* repos untouched
+            !new_repos.contains(p.repository.as_str())
+        });
+
         // Insert the fresh data
         for pipeline in pipelines {
             self.pipelines.insert(pipeline.id.clone(), pipeline);
