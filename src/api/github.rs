@@ -474,3 +474,118 @@ impl CIPlatform for GitHubClient {
         &self.source
     }
 }
+
+// ---------------------------------------------------------------------------
+// Unit tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_map_pipeline_status() {
+        assert_eq!(
+            map_pipeline_status("completed", Some("success")),
+            PipelineStatus::Success
+        );
+        assert_eq!(
+            map_pipeline_status("completed", Some("failure")),
+            PipelineStatus::Failed
+        );
+        assert_eq!(
+            map_pipeline_status("completed", Some("cancelled")),
+            PipelineStatus::Cancelled
+        );
+        assert_eq!(
+            map_pipeline_status("completed", Some("skipped")),
+            PipelineStatus::Skipped
+        );
+        assert_eq!(
+            map_pipeline_status("in_progress", None),
+            PipelineStatus::Running
+        );
+        assert_eq!(
+            map_pipeline_status("queued", None),
+            PipelineStatus::Pending
+        );
+        assert_eq!(
+            map_pipeline_status("waiting", None),
+            PipelineStatus::Pending
+        );
+    }
+
+    #[test]
+    fn test_map_stage_status() {
+        assert_eq!(
+            map_stage_status("completed", Some("success")),
+            StageStatus::Success
+        );
+        assert_eq!(
+            map_stage_status("completed", Some("failure")),
+            StageStatus::Failed
+        );
+        assert_eq!(
+            map_stage_status("in_progress", None),
+            StageStatus::Running
+        );
+        assert_eq!(
+            map_stage_status("queued", None),
+            StageStatus::Pending
+        );
+        assert_eq!(
+            map_stage_status("completed", Some("skipped")),
+            StageStatus::Skipped
+        );
+    }
+
+    #[test]
+    fn test_parse_log_lines_with_timestamps() {
+        let raw = "2024-01-15T10:30:45.1234567Z Running step one\n\
+                   2024-01-15T10:30:46.0000000Z Step one complete";
+        let entries = parse_log_lines(raw);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].line, 1);
+        assert!(entries[0].timestamp.is_some());
+        assert!(entries[0].text.contains("Running step one"));
+        assert_eq!(entries[1].line, 2);
+    }
+
+    #[test]
+    fn test_parse_log_lines_without_timestamps() {
+        let raw = "plain line one\nplain line two";
+        let entries = parse_log_lines(raw);
+        assert_eq!(entries.len(), 2);
+        assert!(entries[0].timestamp.is_none());
+        assert_eq!(entries[0].text, "plain line one");
+    }
+
+    #[test]
+    fn test_run_to_pipeline_mapping() {
+        let run = WorkflowRun {
+            id: 12345,
+            name: Some("CI".into()),
+            head_branch: Some("main".into()),
+            head_sha: "abc123def456".into(),
+            status: "completed".into(),
+            conclusion: Some("success".into()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            run_started_at: Some(Utc::now() - Duration::minutes(5)),
+            html_url: "https://github.com/org/repo/actions/runs/12345".into(),
+            display_title: Some("feat: add feature".into()),
+            actor: Some(Actor { login: "dev".into() }),
+            run_number: 42,
+        };
+
+        let pipeline = run_to_pipeline(&run, "repo", "org", vec![]);
+        assert_eq!(pipeline.id, "github-repo-12345");
+        assert_eq!(pipeline.name, "CI");
+        assert_eq!(pipeline.status, PipelineStatus::Success);
+        assert_eq!(pipeline.branch, "main");
+        assert_eq!(pipeline.build_number, 42);
+        assert_eq!(pipeline.author, "dev");
+        assert_eq!(pipeline.repository, "org/repo");
+        assert!(pipeline.short_commit_sha().starts_with("abc123d"));
+    }
+}
