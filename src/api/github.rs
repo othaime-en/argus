@@ -395,3 +395,82 @@ fn parse_log_lines(raw: &str) -> Vec<LogEntry> {
         })
         .collect()
 }
+
+// ---------------------------------------------------------------------------
+// CIPlatform implementation
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl CIPlatform for GitHubClient {
+    /// Fetch recent workflow runs across all configured repositories.
+    ///
+    /// For each repo we request up to 5 runs (enough for a compact list).
+    /// We then fetch jobs for each run to populate the stages.
+    /// Errors from individual repos are logged but do not abort the whole batch.
+    async fn fetch_pipelines(&self) -> Result<Vec<Pipeline>> {
+        let mut all_pipelines = Vec::new();
+
+        for repo in &self.repos {
+            // Fetch runs – if this single repo fails we skip it
+            let runs = match self.fetch_runs_for_repo(repo, 5).await {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+
+            for run in &runs {
+                // Fetch jobs for stage details
+                let jobs = match self.fetch_jobs_for_run(repo, run.id).await {
+                    Ok(j) => j,
+                    Err(_) => Vec::new(), // render without stages rather than skipping entirely
+                };
+
+                all_pipelines.push(run_to_pipeline(run, repo, &self.owner, jobs));
+            }
+        }
+
+        // Sort: running first, then by started_at descending
+        all_pipelines.sort_by(|a, b| {
+            let status_order = |s: &PipelineStatus| match s {
+                PipelineStatus::Running => 0,
+                PipelineStatus::Pending => 1,
+                PipelineStatus::Failed => 2,
+                PipelineStatus::Success => 3,
+                PipelineStatus::Cancelled => 4,
+                PipelineStatus::Skipped => 5,
+            };
+            status_order(&a.status)
+                .cmp(&status_order(&b.status))
+                .then_with(|| b.started_at.cmp(&a.started_at))
+        });
+
+        Ok(all_pipelines)
+    }
+
+    /// Fetch logs for a specific stage (job) in a pipeline.
+    ///
+    /// `pipeline_id` format: `github-{repo}-{run_id}`
+    /// `stage_id` is the raw GitHub job ID.
+    async fn fetch_logs(&self, _pipeline_id: &str, stage_id: &str) -> Result<Vec<LogEntry>> {
+        let job_id: u64 = stage_id.parse().map_err(|_| {
+            ApiError::RequestFailed(format!("Invalid stage_id: {}", stage_id))
+        })?;
+
+        let raw = self.fetch_job_log(job_id).await?;
+        Ok(parse_log_lines(&raw))
+    }
+
+    /// Light connectivity check: fetch the authenticated user endpoint.
+    async fn test_connection(&self) -> Result<()> {
+        let url = format!("{}/user", GITHUB_API_BASE);
+        self.get_with_retry(&url).await?;
+        Ok(())
+    }
+
+    fn platform_name(&self) -> &str {
+        "GitHub Actions"
+    }
+
+    fn source_name(&self) -> &str {
+        &self.source
+    }
+}
