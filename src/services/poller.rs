@@ -119,3 +119,57 @@ async fn poll_once(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_poller_creates_channel() {
+        let mut poller = PipelinePoller::new();
+        let rx = poller.receiver();
+        // Receiver should be valid (not panicked)
+        assert!(!rx.is_closed());
+    }
+
+    #[test]
+    #[should_panic(expected = "receiver() called more than once")]
+    fn test_poller_panics_on_double_receiver() {
+        let mut poller = PipelinePoller::new();
+        let _ = poller.receiver();
+        let _ = poller.receiver(); // should panic
+    }
+
+    #[tokio::test]
+    async fn test_poll_update_channel() {
+        let (tx, mut rx) = mpsc::channel(8);
+
+        let update = PollUpdate::PipelinesUpdated("test-source".into(), vec![]);
+        tx.send(update).await.unwrap();
+
+        let received = rx.recv().await.unwrap();
+        match received {
+            PollUpdate::PipelinesUpdated(name, pipes) => {
+                assert_eq!(name, "test-source");
+                assert!(pipes.is_empty());
+            }
+            _ => panic!("Expected PipelinesUpdated"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_poll_update_error_variant() {
+        let (tx, mut rx) = mpsc::channel(8);
+        tx.send(PollUpdate::Error("src".into(), "network down".into()))
+            .await
+            .unwrap();
+
+        match rx.recv().await.unwrap() {
+            PollUpdate::Error(name, msg) => {
+                assert_eq!(name, "src");
+                assert_eq!(msg, "network down");
+            }
+            _ => panic!("Expected Error variant"),
+        }
+    }
+}
