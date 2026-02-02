@@ -12,6 +12,8 @@ pub enum SourceStatus {
     Connecting,
     /// Last attempt encountered an error (message included)
     Error(String),
+    /// GitHub (or other) rate limit hit; includes when the limit resets
+    RateLimited(DateTime<Utc>),
 }
 
 impl SourceStatus {
@@ -21,6 +23,7 @@ impl SourceStatus {
             SourceStatus::Connected => "Connected",
             SourceStatus::Connecting => "Connecting…",
             SourceStatus::Error(_) => "Error",
+            SourceStatus::RateLimited(_) => "Rate Limited",
         }
     }
 }
@@ -143,6 +146,25 @@ impl AppState {
         });
 
         // Trim to max
+        while self.errors.len() > self.max_errors {
+            self.errors.pop_front();
+        }
+    }
+
+    /// Record that a source was rate-limited.
+    pub fn mark_source_rate_limited(&mut self, source_name: &str, retry_after: chrono::Duration) {
+        let reset_at = Utc::now() + retry_after;
+        self.source_status.insert(
+            source_name.to_string(),
+            SourceStatus::RateLimited(reset_at),
+        );
+
+        self.errors.push_back(ErrorEntry {
+            source: source_name.to_string(),
+            timestamp: Utc::now(),
+            message: format!("Rate limited until {}", reset_at.format("%H:%M:%S")),
+        });
+
         while self.errors.len() > self.max_errors {
             self.errors.pop_front();
         }
