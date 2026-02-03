@@ -1,15 +1,11 @@
-use tokio::sync::mpsc;
-
 use crate::api::{CIPlatform, LogEntry};
 use crate::config::Config;
 use crate::services::PollUpdate;
 use crate::state::{AppState, SourceStatus};
-use crate::utils::Result;
 
 /// Main application state – lives on the main thread and is mutated only
 /// by the event loop.  All async work happens in background tasks; results
 /// arrive via channels.
-#[derive(Debug)]
 pub struct App {
     /// Static configuration loaded at startup
     pub config: Config,
@@ -47,10 +43,6 @@ pub struct App {
     /// an immediate re-poll and then clear this flag.
     pub force_refresh: bool,
 
-    /// References to the live platform clients so we can fetch logs on demand.
-    /// (The poller also holds clones; these are for ad-hoc log fetches.)
-    pub platforms: Vec<Box<dyn CIPlatform>>,
-
     /// Status message shown briefly in the footer (e.g. "Refreshing…")
     pub status_message: Option<(String, std::time::Instant)>,
 }
@@ -84,7 +76,6 @@ impl App {
             refresh_interval,
             should_quit: false,
             force_refresh: false,
-            platforms: Vec::new(),
             status_message: None,
         }
     }

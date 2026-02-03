@@ -60,7 +60,7 @@ impl PipelinePoller {
 
         tokio::spawn(async move {
             // Run an immediate first poll so the UI isn't empty for 30 s
-            poll_once(&source, &source_name, &tx).await;
+            poll_once(source.as_ref(), &source_name, &tx).await;
 
             loop {
                 // Add ±5 s jitter to avoid thundering-herd when many sources
@@ -79,7 +79,7 @@ impl PipelinePoller {
                     break;
                 }
 
-                poll_once(&source, &source_name, &tx).await;
+                poll_once(source.as_ref(), &source_name, &tx).await;
             }
         });
     }
