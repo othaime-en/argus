@@ -101,15 +101,15 @@ where
         self.map_err(|e| {
             let base_error = e.into();
             match base_error {
-                ArgusError::Config(e) => ArgusError::Config(ConfigError::InvalidConfig(
-                    format!("{}: {}", ctx, e),
-                )),
-                ArgusError::Api(e) => ArgusError::Api(ApiError::RequestFailed(
-                    format!("{}: {}", ctx, e),
-                )),
-                ArgusError::Ui(e) => ArgusError::Ui(UiError::RenderFailed(
-                    format!("{}: {}", ctx, e),
-                )),
+                ArgusError::Config(e) => {
+                    ArgusError::Config(ConfigError::InvalidConfig(format!("{}: {}", ctx, e)))
+                }
+                ArgusError::Api(e) => {
+                    ArgusError::Api(ApiError::RequestFailed(format!("{}: {}", ctx, e)))
+                }
+                ArgusError::Ui(e) => {
+                    ArgusError::Ui(UiError::RenderFailed(format!("{}: {}", ctx, e)))
+                }
                 _ => ArgusError::Unknown(format!("{}: {}", ctx, base_error)),
             }
         })

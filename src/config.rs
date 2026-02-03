@@ -10,15 +10,15 @@ pub struct Config {
     /// Pipeline source configurations
     #[serde(default)]
     pub sources: Vec<SourceConfig>,
-    
+
     /// Polling interval in seconds
     #[serde(default = "default_refresh_interval")]
     pub refresh_interval: u64,
-    
+
     /// UI configuration
     #[serde(default)]
     pub ui: UiConfig,
-    
+
     /// Notification configuration
     #[serde(default)]
     pub notification: NotificationConfig,
@@ -29,32 +29,32 @@ pub struct Config {
 pub struct SourceConfig {
     /// Name of this source (for display purposes)
     pub name: String,
-    
+
     /// Type of source: "github", "gitlab", "jenkins"
     #[serde(rename = "type")]
     pub source_type: String,
-    
+
     /// URL of the source (for self-hosted instances)
     pub url: Option<String>,
-    
+
     /// Environment variable containing the auth token
     pub token_env: Option<String>,
-    
+
     /// Environment variable containing the username (for Jenkins)
     pub username_env: Option<String>,
-    
+
     /// GitHub-specific: organization/user owner
     pub owner: Option<String>,
-    
+
     /// GitHub-specific: list of repositories to monitor
     pub repos: Option<Vec<String>>,
-    
+
     /// GitLab-specific: group name
     pub group: Option<String>,
-    
+
     /// GitLab-specific: list of projects to monitor
     pub projects: Option<Vec<String>>,
-    
+
     /// Jenkins-specific: list of jobs to monitor
     pub jobs: Option<Vec<String>>,
 }
@@ -65,11 +65,11 @@ pub struct UiConfig {
     /// Theme name: "default", "dark", "light", "monokai"
     #[serde(default = "default_theme")]
     pub theme: String,
-    
+
     /// Show timestamps in pipeline list
     #[serde(default = "default_true")]
     pub show_timestamps: bool,
-    
+
     /// Maximum number of log lines to display
     #[serde(default = "default_max_log_lines")]
     pub max_log_lines: usize,
@@ -81,11 +81,11 @@ pub struct NotificationConfig {
     /// Enable desktop notifications
     #[serde(default)]
     pub desktop: bool,
-    
+
     /// Enable sound alerts
     #[serde(default)]
     pub sound: bool,
-    
+
     /// Notification channels
     #[serde(default)]
     pub channels: Vec<String>,
@@ -173,7 +173,8 @@ impl Config {
         if self.refresh_interval == 0 {
             return Err(ConfigError::InvalidConfig(
                 "refresh_interval must be greater than 0".to_string(),
-            ).into());
+            )
+            .into());
         }
 
         // Validate sources
@@ -205,7 +206,8 @@ impl SourceConfig {
                 return Err(ConfigError::InvalidConfig(format!(
                     "Invalid source type: {}. Must be 'github', 'gitlab', or 'jenkins'",
                     self.source_type
-                )).into());
+                ))
+                .into());
             }
         }
 
@@ -214,12 +216,14 @@ impl SourceConfig {
             if self.owner.is_none() {
                 return Err(ConfigError::MissingField(
                     "GitHub source requires 'owner' field".to_string(),
-                ).into());
+                )
+                .into());
             }
             if self.repos.is_none() || self.repos.as_ref().unwrap().is_empty() {
                 return Err(ConfigError::MissingField(
                     "GitHub source requires 'repos' field with at least one repository".to_string(),
-                ).into());
+                )
+                .into());
             }
         }
 
@@ -228,12 +232,14 @@ impl SourceConfig {
             if self.group.is_none() {
                 return Err(ConfigError::MissingField(
                     "GitLab source requires 'group' field".to_string(),
-                ).into());
+                )
+                .into());
             }
             if self.projects.is_none() || self.projects.as_ref().unwrap().is_empty() {
                 return Err(ConfigError::MissingField(
                     "GitLab source requires 'projects' field with at least one project".to_string(),
-                ).into());
+                )
+                .into());
             }
         }
 
@@ -242,12 +248,14 @@ impl SourceConfig {
             if self.url.is_none() {
                 return Err(ConfigError::MissingField(
                     "Jenkins source requires 'url' field".to_string(),
-                ).into());
+                )
+                .into());
             }
             if self.jobs.is_none() || self.jobs.as_ref().unwrap().is_empty() {
                 return Err(ConfigError::MissingField(
                     "Jenkins source requires 'jobs' field with at least one job".to_string(),
-                ).into());
+                )
+                .into());
             }
         }
 
@@ -257,22 +265,18 @@ impl SourceConfig {
     /// Get the authentication token from environment variable
     pub fn get_token(&self) -> Result<String> {
         if let Some(env_var) = &self.token_env {
-            std::env::var(env_var)
-                .map_err(|_| ConfigError::MissingEnvVar(env_var.clone()).into())
+            std::env::var(env_var).map_err(|_| ConfigError::MissingEnvVar(env_var.clone()).into())
         } else {
-            Err(ConfigError::MissingField(
-                "token_env field is required".to_string(),
-            ).into())
+            Err(ConfigError::MissingField("token_env field is required".to_string()).into())
         }
     }
 
     /// Get the username from environment variable (for Jenkins)
     pub fn get_username(&self) -> Result<Option<String>> {
         if let Some(env_var) = &self.username_env {
-            Ok(Some(
-                std::env::var(env_var)
-                    .map_err(|_| ConfigError::MissingEnvVar(env_var.clone()))?,
-            ))
+            Ok(Some(std::env::var(env_var).map_err(|_| {
+                ConfigError::MissingEnvVar(env_var.clone())
+            })?))
         } else {
             Ok(None)
         }

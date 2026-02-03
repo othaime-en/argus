@@ -86,11 +86,7 @@ impl PipelinePoller {
 }
 
 /// Perform a single poll cycle for one source and send the result.
-async fn poll_once(
-    source: &dyn CIPlatform,
-    source_name: &str,
-    tx: &mpsc::Sender<PollUpdate>,
-) {
+async fn poll_once(source: &dyn CIPlatform, source_name: &str, tx: &mpsc::Sender<PollUpdate>) {
     match source.fetch_pipelines().await {
         Ok(pipelines) => {
             let _ = tx

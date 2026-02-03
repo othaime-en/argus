@@ -24,8 +24,8 @@ struct WorkflowRun {
     name: Option<String>,
     head_branch: Option<String>,
     head_sha: String,
-    status: String,               // "completed", "in_progress", "queued", "waiting"
-    conclusion: Option<String>,   // "success", "failure", "cancelled", "skipped", "timed_out", null
+    status: String,             // "completed", "in_progress", "queued", "waiting"
+    conclusion: Option<String>, // "success", "failure", "cancelled", "skipped", "timed_out", null
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     run_started_at: Option<DateTime<Utc>>,
@@ -50,7 +50,7 @@ struct JobsResponse {
 struct Job {
     id: u64,
     name: String,
-    status: String,          // "queued", "in_progress", "completed"
+    status: String, // "queued", "in_progress", "completed"
     conclusion: Option<String>,
     started_at: Option<DateTime<Utc>>,
     completed_at: Option<DateTime<Utc>>,
@@ -229,9 +229,10 @@ impl GitHubClient {
             GITHUB_API_BASE, self.owner, repo, per_page
         );
         let resp = self.get_with_retry(&url).await?;
-        let body: WorkflowRunsResponse = resp.json().await.map_err(|e| {
-            ApiError::ParseFailed(format!("Failed to parse workflow runs: {}", e))
-        })?;
+        let body: WorkflowRunsResponse = resp
+            .json()
+            .await
+            .map_err(|e| ApiError::ParseFailed(format!("Failed to parse workflow runs: {}", e)))?;
         Ok(body.workflow_runs)
     }
 
@@ -242,9 +243,10 @@ impl GitHubClient {
             GITHUB_API_BASE, self.owner, repo, run_id
         );
         let resp = self.get_with_retry(&url).await?;
-        let body: JobsResponse = resp.json().await.map_err(|e| {
-            ApiError::ParseFailed(format!("Failed to parse jobs: {}", e))
-        })?;
+        let body: JobsResponse = resp
+            .json()
+            .await
+            .map_err(|e| ApiError::ParseFailed(format!("Failed to parse jobs: {}", e)))?;
         Ok(body.jobs)
     }
 
@@ -254,9 +256,10 @@ impl GitHubClient {
         // For logs the owner/repo aren't needed in the URL; GitHub routes by job_id.
         // However some installations require it. We use the simpler form here.
         let resp = self.get_with_retry(&url).await?;
-        let text = resp.text().await.map_err(|e| {
-            ApiError::ParseFailed(format!("Failed to read log body: {}", e))
-        })?;
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| ApiError::ParseFailed(format!("Failed to read log body: {}", e)))?;
         Ok(text)
     }
 }
@@ -379,7 +382,10 @@ fn parse_log_lines(raw: &str) -> Vec<LogEntry> {
             // Attempt to split on the first space after an ISO-8601 timestamp
             let (timestamp, text) = if line.len() > 30 {
                 if let Ok(ts) = DateTime::parse_from_rfc3339(&line[..30].trim()) {
-                    (Some(ts.with_timezone(&Utc)), line[30..].trim_start().to_string())
+                    (
+                        Some(ts.with_timezone(&Utc)),
+                        line[30..].trim_start().to_string(),
+                    )
                 } else {
                     (None, line.to_string())
                 }
@@ -451,9 +457,9 @@ impl CIPlatform for GitHubClient {
     /// `pipeline_id` format: `github-{repo}-{run_id}`
     /// `stage_id` is the raw GitHub job ID.
     async fn fetch_logs(&self, _pipeline_id: &str, stage_id: &str) -> Result<Vec<LogEntry>> {
-        let job_id: u64 = stage_id.parse().map_err(|_| {
-            ApiError::RequestFailed(format!("Invalid stage_id: {}", stage_id))
-        })?;
+        let job_id: u64 = stage_id
+            .parse()
+            .map_err(|_| ApiError::RequestFailed(format!("Invalid stage_id: {}", stage_id)))?;
 
         let raw = self.fetch_job_log(job_id).await?;
         Ok(parse_log_lines(&raw))
@@ -505,10 +511,7 @@ mod tests {
             map_pipeline_status("in_progress", None),
             PipelineStatus::Running
         );
-        assert_eq!(
-            map_pipeline_status("queued", None),
-            PipelineStatus::Pending
-        );
+        assert_eq!(map_pipeline_status("queued", None), PipelineStatus::Pending);
         assert_eq!(
             map_pipeline_status("waiting", None),
             PipelineStatus::Pending
@@ -525,14 +528,8 @@ mod tests {
             map_stage_status("completed", Some("failure")),
             StageStatus::Failed
         );
-        assert_eq!(
-            map_stage_status("in_progress", None),
-            StageStatus::Running
-        );
-        assert_eq!(
-            map_stage_status("queued", None),
-            StageStatus::Pending
-        );
+        assert_eq!(map_stage_status("in_progress", None), StageStatus::Running);
+        assert_eq!(map_stage_status("queued", None), StageStatus::Pending);
         assert_eq!(
             map_stage_status("completed", Some("skipped")),
             StageStatus::Skipped
@@ -574,7 +571,9 @@ mod tests {
             run_started_at: Some(Utc::now() - Duration::minutes(5)),
             html_url: "https://github.com/org/repo/actions/runs/12345".into(),
             display_title: Some("feat: add feature".into()),
-            actor: Some(Actor { login: "dev".into() }),
+            actor: Some(Actor {
+                login: "dev".into(),
+            }),
             run_number: 42,
         };
 

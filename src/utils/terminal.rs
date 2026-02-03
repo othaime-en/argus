@@ -13,7 +13,8 @@ pub type Tui = Terminal<CrosstermBackend<Stdout>>;
 /// Initialize the terminal for TUI mode
 pub fn init() -> Result<Tui> {
     // Enable raw mode for input handling
-    enable_raw_mode().map_err(|e| UiError::InitFailed(format!("Failed to enable raw mode: {}", e)))?;
+    enable_raw_mode()
+        .map_err(|e| UiError::InitFailed(format!("Failed to enable raw mode: {}", e)))?;
 
     // Enter alternate screen to preserve terminal state
     execute!(io::stdout(), EnterAlternateScreen)
@@ -47,7 +48,7 @@ pub fn install_panic_hook() {
     std::panic::set_hook(Box::new(move |panic_info| {
         // Try to restore terminal
         let _ = restore();
-        
+
         // Call the original panic hook
         original_hook(panic_info);
     }));

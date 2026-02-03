@@ -127,8 +127,7 @@ impl AppState {
         // Mark source as connected with a fresh timestamp
         self.source_status
             .insert(source_name.to_string(), SourceStatus::Connected);
-        self.last_update
-            .insert(source_name.to_string(), Utc::now());
+        self.last_update.insert(source_name.to_string(), Utc::now());
     }
 
     /// Record that a source encountered an error.
@@ -154,10 +153,8 @@ impl AppState {
     /// Record that a source was rate-limited.
     pub fn mark_source_rate_limited(&mut self, source_name: &str, retry_after: chrono::Duration) {
         let reset_at = Utc::now() + retry_after;
-        self.source_status.insert(
-            source_name.to_string(),
-            SourceStatus::RateLimited(reset_at),
-        );
+        self.source_status
+            .insert(source_name.to_string(), SourceStatus::RateLimited(reset_at));
 
         self.errors.push_back(ErrorEntry {
             source: source_name.to_string(),
@@ -259,14 +256,22 @@ mod tests {
         // First batch
         state.merge_pipelines(
             "my-github",
-            vec![make_pipeline("github-api-1", "org/api", PipelineStatus::Success)],
+            vec![make_pipeline(
+                "github-api-1",
+                "org/api",
+                PipelineStatus::Success,
+            )],
         );
         assert_eq!(state.pipeline_count(), 1);
 
         // Second batch for same repo – should replace
         state.merge_pipelines(
             "my-github",
-            vec![make_pipeline("github-api-2", "org/api", PipelineStatus::Running)],
+            vec![make_pipeline(
+                "github-api-2",
+                "org/api",
+                PipelineStatus::Running,
+            )],
         );
         assert_eq!(state.pipeline_count(), 1);
 
@@ -280,11 +285,19 @@ mod tests {
 
         state.merge_pipelines(
             "source-a",
-            vec![make_pipeline("github-api-1", "org/api", PipelineStatus::Success)],
+            vec![make_pipeline(
+                "github-api-1",
+                "org/api",
+                PipelineStatus::Success,
+            )],
         );
         state.merge_pipelines(
             "source-b",
-            vec![make_pipeline("github-web-1", "org/web", PipelineStatus::Running)],
+            vec![make_pipeline(
+                "github-web-1",
+                "org/web",
+                PipelineStatus::Running,
+            )],
         );
         assert_eq!(state.pipeline_count(), 2);
     }

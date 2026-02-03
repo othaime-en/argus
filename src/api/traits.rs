@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::Duration;
 
-use crate::models::{Pipeline};
+use crate::models::Pipeline;
 use crate::utils::Result;
 
 /// A log entry from a CI/CD pipeline stage

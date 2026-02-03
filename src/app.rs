@@ -96,8 +96,7 @@ impl App {
                 self.state.mark_source_error(&source, &message);
             }
             PollUpdate::RateLimited(source, duration) => {
-                self.state
-                    .mark_source_rate_limited(&source, duration);
+                self.state.mark_source_rate_limited(&source, duration);
             }
         }
     }

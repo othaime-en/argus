@@ -10,7 +10,7 @@ mod state;
 mod ui;
 mod utils;
 
-use api::{GitHubClient, CIPlatform};
+use api::{CIPlatform, GitHubClient};
 use app::App;
 use config::Config;
 use services::PipelinePoller;
@@ -62,7 +62,8 @@ async fn main() -> Result<()> {
                             "Warning: failed to initialize GitHub source '{}': {}",
                             source_cfg.name, e
                         );
-                        app.state.mark_source_error(&source_cfg.name, &e.to_string());
+                        app.state
+                            .mark_source_error(&source_cfg.name, &e.to_string());
                     }
                 }
             }

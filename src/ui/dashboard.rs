@@ -20,10 +20,10 @@ pub fn render(f: &mut Frame, app: &App, theme: &Theme) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Header
-                Constraint::Min(0),     // Body
-                Constraint::Length(8),  // Error panel
-                Constraint::Length(3),  // Footer
+                Constraint::Length(3), // Header
+                Constraint::Min(0),    // Body
+                Constraint::Length(8), // Error panel
+                Constraint::Length(3), // Footer
             ])
             .split(size);
         // chunks: [header, body, errors, footer]
@@ -35,9 +35,9 @@ pub fn render(f: &mut Frame, app: &App, theme: &Theme) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Header
-                Constraint::Min(0),     // Body
-                Constraint::Length(3),  // Footer
+                Constraint::Length(3), // Header
+                Constraint::Min(0),    // Body
+                Constraint::Length(3), // Footer
             ])
             .split(size);
         render_header(f, chunks[0], app, theme);
@@ -61,10 +61,22 @@ fn render_header(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 
     for (name, status) in app.source_statuses() {
         let (icon, style) = match status {
-            SourceStatus::Connected => ("✓", theme.status_style(crate::models::PipelineStatus::Success)),
-            SourceStatus::Connecting => ("⟳", theme.status_style(crate::models::PipelineStatus::Running)),
-            SourceStatus::Error(_) => ("✗", theme.status_style(crate::models::PipelineStatus::Failed)),
-            SourceStatus::RateLimited(_) => ("⏳", theme.status_style(crate::models::PipelineStatus::Pending)),
+            SourceStatus::Connected => (
+                "✓",
+                theme.status_style(crate::models::PipelineStatus::Success),
+            ),
+            SourceStatus::Connecting => (
+                "⟳",
+                theme.status_style(crate::models::PipelineStatus::Running),
+            ),
+            SourceStatus::Error(_) => (
+                "✗",
+                theme.status_style(crate::models::PipelineStatus::Failed),
+            ),
+            SourceStatus::RateLimited(_) => (
+                "⏳",
+                theme.status_style(crate::models::PipelineStatus::Pending),
+            ),
         };
         badge_spans.push(Span::styled(format!("[{} {} ", name, icon), style));
 
@@ -119,8 +131,8 @@ fn render_body(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(40),  // Pipeline list
-            Constraint::Percentage(60),  // Details / Logs
+            Constraint::Percentage(40), // Pipeline list
+            Constraint::Percentage(60), // Details / Logs
         ])
         .split(area);
 
@@ -390,7 +402,8 @@ fn render_log_viewer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
                     {
                         theme.status_style(crate::models::PipelineStatus::Failed)
                     } else if text_lower.contains("warning") || text_lower.contains("warn") {
-                        theme.status_style(crate::models::PipelineStatus::Running) // yellow
+                        theme.status_style(crate::models::PipelineStatus::Running)
+                    // yellow
                     } else if text_lower.contains("success")
                         || text_lower.contains("passed")
                         || text_lower.contains("✓")
@@ -412,8 +425,7 @@ fn render_log_viewer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
             let total = entries.len();
             let title_text = format!(" {}/{} ", scroll + 1, total);
             let block = block.title(
-                ratatui::widgets::block::Title::from(title_text)
-                    .alignment(Alignment::Right)
+                ratatui::widgets::block::Title::from(title_text).alignment(Alignment::Right),
             );
 
             let widget = Paragraph::new(lines).block(block).style(theme.normal());
@@ -472,44 +484,59 @@ fn render_error_panel(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 fn render_footer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     // If there's a transient status message, show it instead
     let content = if let Some((msg, _)) = &app.status_message {
-        Line::from(vec![
-            Span::raw(" "),
-            Span::styled(msg, theme.highlight()),
-        ])
+        Line::from(vec![Span::raw(" "), Span::styled(msg, theme.highlight())])
     } else {
         // Context-aware help line
         match app.focus {
             Focus::PipelineList => Line::from(vec![
                 Span::raw(" "),
-                Span::styled("↑↓", theme.highlight()), Span::raw(" Navigate | "),
-                Span::styled("Enter", theme.highlight()), Span::raw(" Details | "),
-                Span::styled("r", theme.highlight()), Span::raw(" Refresh | "),
-                Span::styled("e", theme.highlight()), Span::raw(" Errors | "),
-                Span::styled("q", theme.highlight()), Span::raw(" Quit"),
+                Span::styled("↑↓", theme.highlight()),
+                Span::raw(" Navigate | "),
+                Span::styled("Enter", theme.highlight()),
+                Span::raw(" Details | "),
+                Span::styled("r", theme.highlight()),
+                Span::raw(" Refresh | "),
+                Span::styled("e", theme.highlight()),
+                Span::raw(" Errors | "),
+                Span::styled("q", theme.highlight()),
+                Span::raw(" Quit"),
             ]),
             Focus::Details => Line::from(vec![
                 Span::raw(" "),
-                Span::styled("↑↓", theme.highlight()), Span::raw(" Stages | "),
-                Span::styled("l", theme.highlight()), Span::raw(" Logs | "),
-                Span::styled("←", theme.highlight()), Span::raw(" Back | "),
-                Span::styled("e", theme.highlight()), Span::raw(" Errors | "),
-                Span::styled("q", theme.highlight()), Span::raw(" Quit"),
+                Span::styled("↑↓", theme.highlight()),
+                Span::raw(" Stages | "),
+                Span::styled("l", theme.highlight()),
+                Span::raw(" Logs | "),
+                Span::styled("←", theme.highlight()),
+                Span::raw(" Back | "),
+                Span::styled("e", theme.highlight()),
+                Span::raw(" Errors | "),
+                Span::styled("q", theme.highlight()),
+                Span::raw(" Quit"),
             ]),
             Focus::Logs => Line::from(vec![
                 Span::raw(" "),
-                Span::styled("↑↓ PgUp PgDn", theme.highlight()), Span::raw(" Scroll | "),
-                Span::styled("Home End", theme.highlight()), Span::raw(" Jump | "),
-                Span::styled("Esc", theme.highlight()), Span::raw(" Close"),
+                Span::styled("↑↓ PgUp PgDn", theme.highlight()),
+                Span::raw(" Scroll | "),
+                Span::styled("Home End", theme.highlight()),
+                Span::raw(" Jump | "),
+                Span::styled("Esc", theme.highlight()),
+                Span::raw(" Close"),
             ]),
             Focus::Errors => Line::from(vec![
                 Span::raw(" "),
-                Span::styled("e", theme.highlight()), Span::raw(" Close errors panel"),
+                Span::styled("e", theme.highlight()),
+                Span::raw(" Close errors panel"),
             ]),
         }
     };
 
     let footer = Paragraph::new(content)
-        .block(Block::default().borders(Borders::ALL).border_style(theme.border()))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(theme.border()),
+        )
         .style(theme.normal());
 
     f.render_widget(footer, area);

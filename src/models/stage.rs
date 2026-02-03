@@ -6,25 +6,25 @@ use serde::{Deserialize, Serialize};
 pub struct Stage {
     /// Unique identifier for this stage
     pub id: String,
-    
+
     /// Name of the stage/job
     pub name: String,
-    
+
     /// Current status of the stage
     pub status: StageStatus,
-    
+
     /// When the stage started (None if not started yet)
     pub started_at: Option<DateTime<Utc>>,
-    
+
     /// When the stage finished (None if still running or not started)
     pub finished_at: Option<DateTime<Utc>>,
-    
+
     /// Duration of the stage execution
     pub duration: Option<Duration>,
-    
+
     /// URL to view the stage logs
     pub log_url: Option<String>,
-    
+
     /// Number of the stage in the pipeline sequence
     pub order: usize,
 }
@@ -34,16 +34,16 @@ pub struct Stage {
 pub enum StageStatus {
     /// Stage completed successfully
     Success,
-    
+
     /// Stage is currently running
     Running,
-    
+
     /// Stage failed
     Failed,
-    
+
     /// Stage is queued/pending
     Pending,
-    
+
     /// Stage was skipped
     Skipped,
 }
