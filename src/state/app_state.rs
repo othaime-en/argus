@@ -226,3 +226,118 @@ pub struct StatusSummary {
     pub cancelled: usize,
     pub skipped: usize,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{Pipeline, PipelineStatus};
+
+    fn make_pipeline(id: &str, repo: &str, status: PipelineStatus) -> Pipeline {
+        Pipeline {
+            id: id.to_string(),
+            name: "Test".into(),
+            source: "GitHub Actions".into(),
+            repository: repo.to_string(),
+            branch: "main".into(),
+            status,
+            build_number: 1,
+            started_at: Utc::now(),
+            finished_at: None,
+            duration: None,
+            stages: vec![],
+            url: "https://example.com".into(),
+            commit_sha: "abc1234".into(),
+            commit_message: "test".into(),
+            author: "dev".into(),
+        }
+    }
+
+    #[test]
+    fn test_merge_replaces_same_repo() {
+        let mut state = AppState::new();
+
+        // First batch
+        state.merge_pipelines(
+            "my-github",
+            vec![make_pipeline("github-api-1", "org/api", PipelineStatus::Success)],
+        );
+        assert_eq!(state.pipeline_count(), 1);
+
+        // Second batch for same repo – should replace
+        state.merge_pipelines(
+            "my-github",
+            vec![make_pipeline("github-api-2", "org/api", PipelineStatus::Running)],
+        );
+        assert_eq!(state.pipeline_count(), 1);
+
+        let pipelines = state.get_sorted_pipelines();
+        assert_eq!(pipelines[0].id, "github-api-2");
+    }
+
+    #[test]
+    fn test_merge_preserves_other_repos() {
+        let mut state = AppState::new();
+
+        state.merge_pipelines(
+            "source-a",
+            vec![make_pipeline("github-api-1", "org/api", PipelineStatus::Success)],
+        );
+        state.merge_pipelines(
+            "source-b",
+            vec![make_pipeline("github-web-1", "org/web", PipelineStatus::Running)],
+        );
+        assert_eq!(state.pipeline_count(), 2);
+    }
+
+    #[test]
+    fn test_sorted_pipelines_order() {
+        let mut state = AppState::new();
+        state.merge_pipelines(
+            "src",
+            vec![
+                make_pipeline("p1", "org/a", PipelineStatus::Success),
+                make_pipeline("p2", "org/b", PipelineStatus::Running),
+                make_pipeline("p3", "org/c", PipelineStatus::Failed),
+            ],
+        );
+
+        let sorted = state.get_sorted_pipelines();
+        assert_eq!(sorted[0].status, PipelineStatus::Running);
+        assert_eq!(sorted[1].status, PipelineStatus::Failed);
+        assert_eq!(sorted[2].status, PipelineStatus::Success);
+    }
+
+    #[test]
+    fn test_error_history_capped() {
+        let mut state = AppState::new();
+        state.max_errors = 3;
+
+        for i in 0..5 {
+            state.mark_source_error("src", &format!("error {}", i));
+        }
+
+        assert_eq!(state.errors.len(), 3);
+        // Should retain the most recent 3
+        assert!(state.errors[0].message.contains("error 2"));
+        assert!(state.errors[2].message.contains("error 4"));
+    }
+
+    #[test]
+    fn test_status_summary() {
+        let mut state = AppState::new();
+        state.merge_pipelines(
+            "src",
+            vec![
+                make_pipeline("p1", "org/a", PipelineStatus::Running),
+                make_pipeline("p2", "org/b", PipelineStatus::Failed),
+                make_pipeline("p3", "org/c", PipelineStatus::Success),
+                make_pipeline("p4", "org/d", PipelineStatus::Success),
+            ],
+        );
+
+        let summary = state.status_summary();
+        assert_eq!(summary.running, 1);
+        assert_eq!(summary.failed, 1);
+        assert_eq!(summary.success, 2);
+    }
+}
