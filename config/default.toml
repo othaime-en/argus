@@ -8,3 +8,9 @@ refresh_interval = 30
 # Theme: "default", "dark", "light", "monokai"
 theme = "default"
 
+[[sources]]
+name = "My GitHub"
+type = "github"
+token_env = "GITHUB_TOKEN"
+owner = "your-github-username"
+repos = ["repo1", "repo2"]
