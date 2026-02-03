@@ -21,12 +21,12 @@ Named after Argus Panoptes—the all-seeing giant from Greek mythology with a hu
 
 ## Development Status
 
-ARGUS is currently in **Phase 1: Foundation** - establishing core infrastructure and basic TUI.
+ARGUS is currently in **Phase 2: Github Actions Integration** - establishing core infrastructure and basic TUI.
 
 ### Roadmap
 
 - [x] Phase 1: Foundation & Core Infrastructure
-- [ ] Phase 2: GitHub Actions Integration
+- [x] Phase 2: GitHub Actions Integration
 - [ ] Phase 3: Multi-Platform Support (GitLab, Jenkins)
 - [ ] Phase 4: Search, Filter & Notifications
 - [ ] Phase 5: Historical Data & Trends
