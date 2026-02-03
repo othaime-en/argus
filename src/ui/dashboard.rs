@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
@@ -206,12 +206,12 @@ fn render_pipeline_list(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 
             Line::from(vec![
                 Span::styled(format!(" {} ", emoji), status_style),
-                Span::styled(&name_display, base_style),
+                Span::styled(name_display, base_style),
                 Span::styled(
                     format!(" ({})", pipeline.branch),
                     base_style.add_modifier(Modifier::DIM),
                 ),
-                Span::styled(&dur_str, base_style.add_modifier(Modifier::DIM)),
+                Span::styled(dur_str, base_style.add_modifier(Modifier::DIM)),
             ])
         })
         .collect();
@@ -225,7 +225,7 @@ fn render_pipeline_list(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     };
 
     let block = if !scroll_text.is_empty() {
-        block.title(ratatui::widgets::block::Title::from(scroll_text).alignment(AlignmentType::RIGHT))
+        block.title(ratatui::widgets::block::Title::from(scroll_text).alignment(Alignment::Right))
     } else {
         block
     };
@@ -402,7 +402,7 @@ fn render_log_viewer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 
                     let line_num = format!("{:>5} ", entry.line);
                     Line::from(vec![
-                        Span::styled(&line_num, theme.normal().add_modifier(Modifier::DIM)),
+                        Span::styled(line_num, theme.normal().add_modifier(Modifier::DIM)),
                         Span::styled(&entry.text, style),
                     ])
                 })
@@ -413,7 +413,7 @@ fn render_log_viewer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
             let title_text = format!(" {}/{} ", scroll + 1, total);
             let block = block.title(
                 ratatui::widgets::block::Title::from(title_text)
-                    .alignment(AlignmentType::RIGHT)
+                    .alignment(Alignment::Right)
             );
 
             let widget = Paragraph::new(lines).block(block).style(theme.normal());

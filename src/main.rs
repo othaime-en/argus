@@ -10,7 +10,7 @@ mod state;
 mod ui;
 mod utils;
 
-use api::GitHubClient;
+use api::{GitHubClient, CIPlatform};
 use app::App;
 use config::Config;
 use services::PipelinePoller;
@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
     // -----------------------------------------------------------------------
     // 2. Load configuration
     // -----------------------------------------------------------------------
-    let config = match Config::load() {
+    let cfg = match Config::load() {
         Ok(cfg) => cfg,
         Err(e) => {
             eprintln!("Failed to load configuration: {}", e);
@@ -36,8 +36,8 @@ async fn main() -> Result<()> {
         }
     };
 
-    let theme = Theme::from_name(&config.ui.theme);
-    let mut app = App::new(config.clone());
+    let theme = Theme::from_name(&cfg.ui.theme);
+    let mut app = App::new(cfg.clone());
 
     // -----------------------------------------------------------------------
     // 3. Build platform clients from configured sources
@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
     let mut poller = PipelinePoller::new();
     let mut any_source_configured = false;
 
-    for source_cfg in &config.sources {
+    for source_cfg in &cfg.sources {
         match source_cfg.source_type.as_str() {
             "github" => {
                 match GitHubClient::new(source_cfg) {
@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
 
                         // Start background polling for this source
                         let boxed: Box<dyn api::CIPlatform> = Box::new(client);
-                        poller.start(boxed, config.refresh_interval);
+                        poller.start(boxed, cfg.refresh_interval);
                     }
                     Err(e) => {
                         eprintln!(
@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
 
     let mut poll_rx = poller.receiver();
 
-    run_event_loop(&mut terminal, &mut app, &theme, &mut poll_rx).await?;
+    run_event_loop(&mut terminal, &mut app, &theme, &mut poll_rx, &cfg).await?;
 
     Ok(())
 }
@@ -111,6 +111,7 @@ async fn run_event_loop(
     app: &mut App,
     theme: &Theme,
     poll_rx: &mut tokio::sync::mpsc::Receiver<services::PollUpdate>,
+    cfg: &Config,
 ) -> Result<()> {
     // We need a second tokio handle for spawning log-fetch tasks from inside
     // the loop.  The results come back through a one-shot channel.
@@ -128,7 +129,7 @@ async fn run_event_loop(
         // ------------------------------------------------------------------
         // 1b. Check for completed log fetch
         // ------------------------------------------------------------------
-        if let Some(rx_taken) = log_result_rx.take() {
+        if let Some(mut rx_taken) = log_result_rx.take() {
             // Try to receive without blocking
             match rx_taken.try_recv() {
                 Ok(Ok(entries)) => {
@@ -163,7 +164,7 @@ async fn run_event_loop(
                     // We need to re-create a client for this async task.
                     // In the future we'd match by source and clone the right one.
                     // For now, Phase 2 only has GitHub, so we rebuild from config.
-                    if let Some(source_cfg) = config.sources.first() {
+                    if let Some(source_cfg) = cfg.sources.first() {
                         if let Ok(client) = api::GitHubClient::new(source_cfg) {
                             let (tx, rx) = tokio::sync::oneshot::channel();
                             log_result_rx = Some(rx);
