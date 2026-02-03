@@ -1,0 +1,171 @@
+# Example ARGUS Configuration
+# Copy this file to ~/.config/argus/config.toml and customize
+
+# How often to refresh pipeline data (in seconds)
+refresh_interval = 30
+
+# UI Configuration
+[ui]
+# Available themes: "default", "dark", "light", "monokai"
+theme = "default"
+
+# Show timestamps in the pipeline list
+show_timestamps = true
+
+# Maximum number of log lines to keep in memory
+max_log_lines = 1000
+
+# Notification Configuration
+[notification]
+# Enable desktop notifications (requires notification support)
+desktop = false
+
+# Enable sound alerts
+sound = false
+
+# List of notification channels (configured below)
+channels = []
+
+# ============================================================================
+# PIPELINE SOURCES
+# ============================================================================
+# Uncomment and configure the sources you want to monitor
+
+# ----------------------------------------------------------------------------
+# GitHub Actions Example
+# ----------------------------------------------------------------------------
+# [[sources]]
+# name = "my-github-projects"
+# type = "github"
+# token_env = "GITHUB_TOKEN"
+# owner = "your-organization-or-username"
+# repos = ["backend-api", "frontend-app", "mobile-app"]
+
+# You'll need to set GITHUB_TOKEN in your environment:
+# export GITHUB_TOKEN="ghp_your_personal_access_token"
+#
+# To create a token:
+# 1. Go to GitHub Settings → Developer settings → Personal access tokens
+# 2. Generate new token with 'repo' and 'workflow' scopes
+# 3. Copy the token and set it in your environment
+
+# ----------------------------------------------------------------------------
+# GitLab CI Example (Phase 3+)
+# ----------------------------------------------------------------------------
+# [[sources]]
+# name = "my-gitlab-projects"
+# type = "gitlab"
+# url = "https://gitlab.com"  # or your self-hosted GitLab URL
+# token_env = "GITLAB_TOKEN"
+# group = "your-group-name"
+# projects = ["project1", "project2"]
+
+# You'll need to set GITLAB_TOKEN in your environment:
+# export GITLAB_TOKEN="your_gitlab_token"
+#
+# To create a token:
+# 1. Go to GitLab User Settings → Access Tokens
+# 2. Create token with 'api' and 'read_api' scopes
+# 3. Copy the token and set it in your environment
+
+# ----------------------------------------------------------------------------
+# Jenkins Example (Phase 3+)
+# ----------------------------------------------------------------------------
+# [[sources]]
+# name = "production-jenkins"
+# type = "jenkins"
+# url = "https://jenkins.mycompany.com"
+# username_env = "JENKINS_USER"
+# token_env = "JENKINS_TOKEN"
+# jobs = ["deploy-production", "run-integration-tests"]
+
+# You'll need to set both JENKINS_USER and JENKINS_TOKEN:
+# export JENKINS_USER="your_username"
+# export JENKINS_TOKEN="your_api_token"
+#
+# To create a Jenkins API token:
+# 1. Go to Jenkins → Your User → Configure
+# 2. API Token → Add new Token
+# 3. Copy the token and set it in your environment
+
+# ============================================================================
+# MULTIPLE SOURCES EXAMPLE
+# ============================================================================
+# You can configure multiple sources of the same or different types:
+#
+# [[sources]]
+# name = "production-services"
+# type = "github"
+# token_env = "GITHUB_TOKEN"
+# owner = "mycompany"
+# repos = ["auth-service", "payment-service", "notification-service"]
+#
+# [[sources]]
+# name = "internal-tools"
+# type = "github"
+# token_env = "GITHUB_TOKEN"
+# owner = "mycompany"
+# repos = ["admin-panel", "monitoring-dashboard"]
+#
+# [[sources]]
+# name = "gitlab-projects"
+# type = "gitlab"
+# url = "https://gitlab.mycompany.com"
+# token_env = "GITLAB_TOKEN"
+# group = "platform"
+# projects = ["api-gateway", "message-queue"]
+
+# ============================================================================
+# NOTIFICATION CHANNELS (Phase 4+)
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Email Notifications
+# ----------------------------------------------------------------------------
+# [[notification.email]]
+# smtp_server = "smtp.gmail.com"
+# smtp_port = 587
+# username_env = "EMAIL_USER"
+# password_env = "EMAIL_PASSWORD"
+# from = "argus@mycompany.com"
+# to = ["devops@mycompany.com", "oncall@mycompany.com"]
+# on_failure = true
+# on_success = false
+
+# ----------------------------------------------------------------------------
+# Slack Notifications
+# ----------------------------------------------------------------------------
+# [[notification.slack]]
+# webhook_url_env = "SLACK_WEBHOOK_URL"
+# channel = "#deployments"
+# on_failure = true
+# on_success = true
+# on_pending = false
+
+# To create a Slack webhook:
+# 1. Go to your Slack workspace settings
+# 2. Create an Incoming Webhook
+# 3. Set SLACK_WEBHOOK_URL in your environment
+
+# ----------------------------------------------------------------------------
+# Generic Webhook
+# ----------------------------------------------------------------------------
+# [[notification.webhook]]
+# url = "https://mycompany.com/api/webhooks/ci-status"
+# method = "POST"
+# headers = { "Authorization" = "Bearer token123", "Content-Type" = "application/json" }
+# on_failure = true
+# on_success = true
+# on_pending = false
+
+# ============================================================================
+# TIPS
+# ============================================================================
+# 
+# 1. Keep secrets in environment variables, not in this file
+# 2. Start with a longer refresh_interval (60s) and decrease as needed
+# 3. Focus on critical pipelines first, add more later
+# 4. Use descriptive names for your sources
+# 5. Group related repositories together in separate sources
+#
+# For more help, see: docs/user_guide.md
