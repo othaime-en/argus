@@ -88,7 +88,7 @@ impl AppState {
     /// lingering after a workflow is deleted or renamed on GitHub.
     pub fn merge_pipelines(&mut self, source_name: &str, pipelines: Vec<Pipeline>) {
         // Remove old entries from this source
-        self.pipelines.retain(|_, p| {
+        self.pipelines.retain(|_, _p| {
             // Match by the source_name stored in the pipeline's source field
             // combined with checking source_status keys. We use the `source`
             // field on Pipeline which stores e.g. "GitHub Actions", but we
@@ -106,7 +106,7 @@ impl AppState {
         // (see github.rs: id = "github-{repo}-{run_id}").
         // For a clean merge we remove all pipelines whose id starts with
         // any prefix that matches this source's repos.
-        let new_ids: Vec<String> = pipelines.iter().map(|p| p.id.clone()).collect();
+        let _new_ids: Vec<String> = pipelines.iter().map(|p| p.id.clone()).collect();
 
         // Determine which IDs to evict: any existing pipeline whose
         // "source" field matches the platform AND whose repository is one

@@ -1,4 +1,4 @@
-use crate::api::{CIPlatform, LogEntry};
+use crate::api::LogEntry;
 use crate::config::Config;
 use crate::services::PollUpdate;
 use crate::state::{AppState, SourceStatus};
