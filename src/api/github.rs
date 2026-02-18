@@ -104,6 +104,7 @@ impl GitHubClient {
         // Pre-build an HTTP client with a 10 s timeout
         let http = Client::builder()
             .timeout(StdDuration::from_secs(10))
+            .user_agent("Argus-Pipeline-Monitor/0.2.0")
             .build()
             .map_err(|e| ApiError::Network(e.to_string()))?;
 
