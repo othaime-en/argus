@@ -1,6 +1,6 @@
 [package]
 name = "argus"
-version = "0.1.0"
+version = "0.2.0-dev"
 edition = "2021"
 authors = ["othaime-en"]
 description = "All-Seeing Pipeline Monitor - A TUI dashboard for CI/CD pipelines"
