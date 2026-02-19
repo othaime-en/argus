@@ -489,6 +489,7 @@ impl CIPlatform for GitHubClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Duration;
 
     #[test]
     fn test_map_pipeline_status() {
