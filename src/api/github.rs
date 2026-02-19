@@ -380,12 +380,16 @@ fn parse_log_lines(raw: &str) -> Vec<LogEntry> {
     raw.lines()
         .enumerate()
         .map(|(i, line)| {
-            // Attempt to split on the first space after an ISO-8601 timestamp
-            let (timestamp, text) = if line.len() > 30 {
-                if let Ok(ts) = DateTime::parse_from_rfc3339(&line[..30].trim()) {
+            // GitHub logs typically start with timestamps like:
+            // 2024-01-15T10:30:45.1234567Z <rest of line>
+            // Try to find where the timestamp ends
+            let (timestamp, text) = if let Some(space_pos) = line.find(' ') {
+                // Try to parse everything before the first space as a timestamp
+                let potential_ts = &line[..space_pos];
+                if let Ok(ts) = DateTime::parse_from_rfc3339(potential_ts) {
                     (
                         Some(ts.with_timezone(&Utc)),
-                        line[30..].trim_start().to_string(),
+                        line[space_pos..].trim_start().to_string(),
                     )
                 } else {
                     (None, line.to_string())
