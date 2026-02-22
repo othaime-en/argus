@@ -14,3 +14,18 @@ type = "github"
 token_env = "GITHUB_TOKEN"
 owner = "your-github-username"
 repos = ["repo1", "repo2"]
+
+[[sources]]
+name = "my-gitlab"        # shows up as [GL] in the UI
+type = "gitlab"
+token_env = "GITLAB_TOKEN"
+# url = "https://gitlab.mycompany.com"  # only needed for self-hosted
+projects = ["mygroup/backend-api", "mygroup/frontend-app"]
+
+[[sources]]
+name = "production-jenkins"   # shows up as [JK] in the UI
+type = "jenkins"
+url = "https://jenkins.mycompany.com"
+username_env = "JENKINS_USER"
+token_env = "JENKINS_TOKEN"
+jobs = ["backend-build", "deploy-production", "run-integration-tests"]
