@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::Modifier,
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -11,80 +11,84 @@ use crate::state::SourceStatus;
 use crate::ui::theme::Theme;
 use crate::utils::time::{format_duration_compact, format_relative};
 
-/// Top-level render entry point – delegates to the sub-renderers.
 pub fn render(f: &mut Frame, app: &App, theme: &Theme) {
     let size = f.size();
 
-    // Decide whether to show the error panel (takes 8 rows at the bottom)
-    let (body_area, error_area) = if app.show_errors {
+    if app.show_errors {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Min(0),    // Body
-                Constraint::Length(8), // Error panel
-                Constraint::Length(3), // Footer
+                Constraint::Length(3),
+                Constraint::Min(0),
+                Constraint::Length(8),
+                Constraint::Length(3),
             ])
             .split(size);
-        // chunks: [header, body, errors, footer]
+
         render_header(f, chunks[0], app, theme);
         render_footer(f, chunks[3], app, theme);
         render_error_panel(f, chunks[2], app, theme);
-        (chunks[1], Some(chunks[2]))
+        render_body(f, chunks[1], app, theme);
     } else {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Min(0),    // Body
-                Constraint::Length(3), // Footer
+                Constraint::Length(3),
+                Constraint::Min(0),
+                Constraint::Length(3),
             ])
             .split(size);
+
         render_header(f, chunks[0], app, theme);
         render_footer(f, chunks[2], app, theme);
-        (chunks[1], None)
-    };
-    let _ = error_area; // suppress unused warning; it's already rendered above
-
-    // Body: pipeline list (left) + right panel (details or logs)
-    render_body(f, body_area, app, theme);
+        render_body(f, chunks[1], app, theme);
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Header
 // ---------------------------------------------------------------------------
 
+/// Return a distinct color for each known platform type so the source legend
+/// is immediately recognisable (GitHub=Blue, GitLab=Orange/Yellow, Jenkins=Red).
+fn source_type_color(source_name: &str, status: &SourceStatus) -> Style {
+    // When there is a hard error or rate-limit we let the status colour win so
+    // the operator immediately notices the problem.
+    match status {
+        SourceStatus::Error(_) => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        SourceStatus::RateLimited(_) => Style::default().fg(Color::Yellow),
+        _ => {
+            // Infer platform from the source name; callers embed the type name.
+            let lc = source_name.to_lowercase();
+            if lc.contains("github") {
+                Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
+            } else if lc.contains("gitlab") {
+                // GitLab brand colour is roughly #FC6D26 (orange).
+                Style::default().fg(Color::Rgb(252, 109, 38)).add_modifier(Modifier::BOLD)
+            } else if lc.contains("jenkins") {
+                // Jenkins brand colour is a muted red/brown.
+                Style::default().fg(Color::Rgb(215, 58, 74)).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            }
+        }
+    }
+}
+
 fn render_header(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
-    // Build the source status badges: "[GitHub ✓ 5] [GitHub ⟳]"
     let mut badge_spans: Vec<Span> = Vec::new();
-    badge_spans.push(Span::raw(" "));
+    badge_spans.push(Span::raw("Sources: "));
 
     for (name, status) in app.source_statuses() {
-        let (icon, style) = match status {
-            SourceStatus::Connected => (
-                "✓",
-                theme.status_style(crate::models::PipelineStatus::Success),
-            ),
-            SourceStatus::Connecting => (
-                "⟳",
-                theme.status_style(crate::models::PipelineStatus::Running),
-            ),
-            SourceStatus::Error(_) => (
-                "✗",
-                theme.status_style(crate::models::PipelineStatus::Failed),
-            ),
-            SourceStatus::RateLimited(_) => (
-                "⏳",
-                theme.status_style(crate::models::PipelineStatus::Pending),
-            ),
+        let (icon, conn_label) = match status {
+            SourceStatus::Connected => ("✓", ""),
+            SourceStatus::Connecting => ("⟳", ""),
+            SourceStatus::Error(_) => ("✗", ""),
+            SourceStatus::RateLimited(_) => ("⏳", ""),
         };
-        badge_spans.push(Span::styled(format!("[{} {} ", name, icon), style));
 
-        // Show pipeline count for connected sources
-        if *status == SourceStatus::Connected {
-            badge_spans.push(Span::styled("•", style));
-        }
-        badge_spans.push(Span::styled("] ", style));
+        let style = source_type_color(name, status);
+        badge_spans.push(Span::styled(format!("[{} {} {}] ", name, icon, conn_label), style));
     }
 
     let title_line = Line::from(vec![
@@ -93,7 +97,7 @@ fn render_header(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     ]);
 
     let status_text = format!(
-        " {} pipelines | Refresh: {}s ",
+        " {} pipelines | {}s refresh ",
         app.state.pipeline_count(),
         app.refresh_interval
     );
@@ -109,8 +113,6 @@ fn render_header(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 
     f.render_widget(header, area);
 
-    // Render source badges as a second line inside the header box
-    // (They fit if there's room; otherwise they're clipped)
     if !badge_spans.is_empty() && area.height > 2 {
         let badge_area = Rect {
             x: area.x + 1,
@@ -118,8 +120,7 @@ fn render_header(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
             width: area.width.saturating_sub(2),
             height: 1,
         };
-        let badges = Paragraph::new(Line::from(badge_spans));
-        f.render_widget(badges, badge_area);
+        f.render_widget(Paragraph::new(Line::from(badge_spans)), badge_area);
     }
 }
 
@@ -130,15 +131,11 @@ fn render_header(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 fn render_body(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(40), // Pipeline list
-            Constraint::Percentage(60), // Details / Logs
-        ])
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
         .split(area);
 
     render_pipeline_list(f, chunks[0], app, theme);
 
-    // Right panel: show logs if that's the current focus, otherwise details
     if app.focus == Focus::Logs {
         render_log_viewer(f, chunks[1], app, theme);
     } else {
@@ -147,16 +144,26 @@ fn render_body(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 }
 
 // ---------------------------------------------------------------------------
-// Pipeline list (left panel)
+// Pipeline list – shows a source-type badge next to each entry
 // ---------------------------------------------------------------------------
+
+/// Short platform label shown as a coloured prefix in the pipeline list.
+fn platform_badge(source: &str) -> (&'static str, Color) {
+    let lc = source.to_lowercase();
+    if lc.contains("github") {
+        ("GH", Color::Blue)
+    } else if lc.contains("gitlab") {
+        ("GL", Color::Rgb(252, 109, 38))
+    } else if lc.contains("jenkins") {
+        ("JK", Color::Rgb(215, 58, 74))
+    } else {
+        ("CI", Color::Cyan)
+    }
+}
 
 fn render_pipeline_list(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     let is_focused = app.focus == Focus::PipelineList;
-    let border_style = if is_focused {
-        theme.border_focused()
-    } else {
-        theme.border()
-    };
+    let border_style = if is_focused { theme.border_focused() } else { theme.border() };
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -171,15 +178,11 @@ fn render_pipeline_list(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         } else {
             "Fetching pipelines…\n\nNo data yet. Press 'r' to force refresh."
         };
-        let widget = Paragraph::new(msg).block(block).style(theme.normal());
-        f.render_widget(widget, area);
+        f.render_widget(Paragraph::new(msg).block(block).style(theme.normal()), area);
         return;
     }
 
-    // Viewable rows inside the block (subtract 2 for top+bottom borders)
     let visible_rows = (area.height as usize).saturating_sub(2);
-
-    // Scroll window: ensure selected pipeline is visible
     let scroll_offset = if app.selected_pipeline >= visible_rows {
         app.selected_pipeline - visible_rows + 1
     } else {
@@ -193,31 +196,32 @@ fn render_pipeline_list(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         .take(visible_rows)
         .map(|(i, pipeline)| {
             let is_selected = i == app.selected_pipeline;
-            let base_style = if is_selected {
-                theme.selected()
+            let base_style = if is_selected { theme.selected() } else { theme.normal() };
+            let status_style = theme.status_style(pipeline.status);
+
+            let (badge_label, badge_color) = platform_badge(&pipeline.source);
+            let badge_style = if is_selected {
+                // Keep badge visible on selected background
+                Style::default().fg(badge_color).add_modifier(Modifier::BOLD)
             } else {
-                theme.normal()
+                Style::default().fg(badge_color).add_modifier(Modifier::BOLD)
             };
 
-            let status_style = theme.status_style(pipeline.status);
-            let emoji = pipeline.status.emoji();
-
-            // Truncate long names to fit the panel
-            let max_name = 22usize;
+            let max_name = 20usize;
             let name_display = if pipeline.name.len() > max_name {
                 format!("{}…", &pipeline.name[..max_name - 1])
             } else {
                 pipeline.name.clone()
             };
 
-            // Duration badge
             let dur_str = pipeline
                 .duration
                 .map(|d| format!(" {}", format_duration_compact(&d)))
                 .unwrap_or_default();
 
             Line::from(vec![
-                Span::styled(format!(" {} ", emoji), status_style),
+                Span::styled(format!("[{}] ", badge_label), badge_style),
+                Span::styled(format!("{} ", pipeline.status.emoji()), status_style),
                 Span::styled(name_display, base_style),
                 Span::styled(
                     format!(" ({})", pipeline.branch),
@@ -228,7 +232,6 @@ fn render_pipeline_list(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         })
         .collect();
 
-    // Scroll indicator
     let total = pipelines.len();
     let scroll_text = if total > visible_rows {
         format!(" {}/{} ", app.selected_pipeline + 1, total)
@@ -242,21 +245,16 @@ fn render_pipeline_list(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         block
     };
 
-    let widget = Paragraph::new(lines).block(block).style(theme.normal());
-    f.render_widget(widget, area);
+    f.render_widget(Paragraph::new(lines).block(block).style(theme.normal()), area);
 }
 
 // ---------------------------------------------------------------------------
-// Details panel (right panel – stage list)
+// Details panel
 // ---------------------------------------------------------------------------
 
 fn render_details_panel(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     let is_focused = app.focus == Focus::Details;
-    let border_style = if is_focused {
-        theme.border_focused()
-    } else {
-        theme.border()
-    };
+    let border_style = if is_focused { theme.border_focused() } else { theme.border() };
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -266,40 +264,47 @@ fn render_details_panel(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     let pipeline = match app.selected_pipeline_ref() {
         Some(p) => p,
         None => {
-            let widget = Paragraph::new("No pipelines available")
-                .block(block)
-                .style(theme.normal());
-            f.render_widget(widget, area);
+            f.render_widget(
+                Paragraph::new("No pipelines available").block(block).style(theme.normal()),
+                area,
+            );
             return;
         }
     };
 
+    let (badge_label, badge_color) = platform_badge(&pipeline.source);
+    let badge_style = Style::default().fg(badge_color).add_modifier(Modifier::BOLD);
+
     let mut lines: Vec<Line> = vec![
         Line::from(vec![
-            Span::styled("Pipeline: ", theme.highlight()),
+            Span::styled("Platform:  ", theme.highlight()),
+            Span::styled(format!("[{}] {}", badge_label, pipeline.source), badge_style),
+        ]),
+        Line::from(vec![
+            Span::styled("Pipeline:  ", theme.highlight()),
             Span::raw(&pipeline.name),
         ]),
         Line::from(vec![
-            Span::styled("Repository: ", theme.highlight()),
-            Span::raw(&pipeline.repository),
+            Span::styled("Repository:", theme.highlight()),
+            Span::raw(format!(" {}", pipeline.repository)),
         ]),
         Line::from(vec![
-            Span::styled("Status:   ", theme.highlight()),
+            Span::styled("Status:    ", theme.highlight()),
             Span::styled(
                 format!("{} {}", pipeline.status.emoji(), pipeline.status.as_str()),
                 theme.status_style(pipeline.status),
             ),
         ]),
         Line::from(vec![
-            Span::styled("Branch:   ", theme.highlight()),
+            Span::styled("Branch:    ", theme.highlight()),
             Span::raw(&pipeline.branch),
         ]),
         Line::from(vec![
-            Span::styled("Build:    ", theme.highlight()),
+            Span::styled("Build:     ", theme.highlight()),
             Span::raw(format!("#{}", pipeline.build_number)),
         ]),
         Line::from(vec![
-            Span::styled("Commit:   ", theme.highlight()),
+            Span::styled("Commit:    ", theme.highlight()),
             Span::raw(format!(
                 "{} – {}",
                 pipeline.short_commit_sha(),
@@ -307,18 +312,18 @@ fn render_details_panel(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
             )),
         ]),
         Line::from(vec![
-            Span::styled("Author:   ", theme.highlight()),
+            Span::styled("Author:    ", theme.highlight()),
             Span::raw(&pipeline.author),
         ]),
         Line::from(vec![
-            Span::styled("Started:  ", theme.highlight()),
+            Span::styled("Started:   ", theme.highlight()),
             Span::raw(format_relative(&pipeline.started_at)),
         ]),
     ];
 
     if let Some(dur) = &pipeline.duration {
         lines.push(Line::from(vec![
-            Span::styled("Duration: ", theme.highlight()),
+            Span::styled("Duration:  ", theme.highlight()),
             Span::raw(format_duration_compact(dur)),
         ]));
     }
@@ -330,20 +335,12 @@ fn render_details_panel(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     )));
     lines.push(Line::from(""));
 
-    // Render stages
     let selected_stage = app.log_stage_index.unwrap_or(0);
     for (i, stage) in pipeline.stages.iter().enumerate() {
         let is_stage_selected = i == selected_stage && is_focused;
-        let stage_style = if is_stage_selected {
-            theme.selected()
-        } else {
-            theme.normal()
-        };
-
+        let stage_style = if is_stage_selected { theme.selected() } else { theme.normal() };
         let status_style = theme.stage_status_style(stage.status);
-
         let prefix = if is_stage_selected { " ▶ " } else { "   " };
-
         let dur_text = stage
             .duration
             .map(|d| format!(" ({})", format_duration_compact(&d)))
@@ -357,12 +354,11 @@ fn render_details_panel(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         ]));
     }
 
-    let widget = Paragraph::new(lines).block(block).style(theme.normal());
-    f.render_widget(widget, area);
+    f.render_widget(Paragraph::new(lines).block(block).style(theme.normal()), area);
 }
 
 // ---------------------------------------------------------------------------
-// Log viewer (replaces details panel when focus == Logs)
+// Log viewer
 // ---------------------------------------------------------------------------
 
 fn render_log_viewer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
@@ -373,17 +369,18 @@ fn render_log_viewer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 
     match &app.logs {
         None => {
-            // Logs are being fetched (or about to be)
-            let widget = Paragraph::new("  Fetching logs…")
-                .block(block)
-                .style(theme.normal());
-            f.render_widget(widget, area);
+            f.render_widget(
+                Paragraph::new("  Fetching logs…").block(block).style(theme.normal()),
+                area,
+            );
         }
         Some(entries) if entries.is_empty() => {
-            let widget = Paragraph::new("  No log output available for this stage.")
-                .block(block)
-                .style(theme.normal());
-            f.render_widget(widget, area);
+            f.render_widget(
+                Paragraph::new("  No log output available for this stage.")
+                    .block(block)
+                    .style(theme.normal()),
+                area,
+            );
         }
         Some(entries) => {
             let visible_rows = (area.height as usize).saturating_sub(2);
@@ -394,7 +391,6 @@ fn render_log_viewer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
                 .skip(scroll)
                 .take(visible_rows)
                 .map(|entry| {
-                    // Basic syntax-highlighting rules
                     let text_lower = entry.text.to_lowercase();
                     let style = if text_lower.contains("error")
                         || text_lower.contains("failed")
@@ -403,7 +399,6 @@ fn render_log_viewer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
                         theme.status_style(crate::models::PipelineStatus::Failed)
                     } else if text_lower.contains("warning") || text_lower.contains("warn") {
                         theme.status_style(crate::models::PipelineStatus::Running)
-                    // yellow
                     } else if text_lower.contains("success")
                         || text_lower.contains("passed")
                         || text_lower.contains("✓")
@@ -421,15 +416,13 @@ fn render_log_viewer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
                 })
                 .collect();
 
-            // Scroll indicator in title
             let total = entries.len();
             let title_text = format!(" {}/{} ", scroll + 1, total);
             let block = block.title(
                 ratatui::widgets::block::Title::from(title_text).alignment(Alignment::Right),
             );
 
-            let widget = Paragraph::new(lines).block(block).style(theme.normal());
-            f.render_widget(widget, area);
+            f.render_widget(Paragraph::new(lines).block(block).style(theme.normal()), area);
         }
     }
 }
@@ -446,17 +439,17 @@ fn render_error_panel(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 
     let errors = &app.state.errors;
     if errors.is_empty() {
-        let widget = Paragraph::new("  No recent errors.")
-            .block(block)
-            .style(theme.normal());
-        f.render_widget(widget, area);
+        f.render_widget(
+            Paragraph::new("  No recent errors.").block(block).style(theme.normal()),
+            area,
+        );
         return;
     }
 
     let visible = (area.height as usize).saturating_sub(2);
     let lines: Vec<Line> = errors
         .iter()
-        .rev() // most recent first
+        .rev()
         .take(visible)
         .map(|err| {
             Line::from(vec![
@@ -468,13 +461,15 @@ fn render_error_panel(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
                     format!("[{}] ", err.source),
                     theme.status_style(crate::models::PipelineStatus::Running),
                 ),
-                Span::styled(&err.message, theme.status_style(crate::models::PipelineStatus::Failed)),
+                Span::styled(
+                    &err.message,
+                    theme.status_style(crate::models::PipelineStatus::Failed),
+                ),
             ])
         })
         .collect();
 
-    let widget = Paragraph::new(lines).block(block).style(theme.normal());
-    f.render_widget(widget, area);
+    f.render_widget(Paragraph::new(lines).block(block).style(theme.normal()), area);
 }
 
 // ---------------------------------------------------------------------------
@@ -482,11 +477,9 @@ fn render_error_panel(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 // ---------------------------------------------------------------------------
 
 fn render_footer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
-    // If there's a transient status message, show it instead
     let content = if let Some((msg, _)) = &app.status_message {
         Line::from(vec![Span::raw(" "), Span::styled(msg, theme.highlight())])
     } else {
-        // Context-aware help line
         match app.focus {
             Focus::PipelineList => Line::from(vec![
                 Span::raw(" "),
@@ -531,13 +524,10 @@ fn render_footer(f: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         }
     };
 
-    let footer = Paragraph::new(content)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(theme.border()),
-        )
-        .style(theme.normal());
-
-    f.render_widget(footer, area);
+    f.render_widget(
+        Paragraph::new(content).block(
+            Block::default().borders(Borders::ALL).border_style(theme.border()),
+        ).style(theme.normal()),
+        area,
+    );
 }
